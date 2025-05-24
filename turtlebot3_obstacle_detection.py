@@ -1,3 +1,4 @@
+pt 2
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
@@ -25,7 +26,7 @@ class Turtlebot3ObstacleDetection(Node):
         super().__init__('turtlebot3_obstacle_detection')
         print('TurtleBot3 Obstacle Detection')
         print('--------------------------------------------------')
-        print('Stop distance: 0.25 m | Safety distance: 0.6 m | Early react distance: 1.0 m')
+        print('Stop distance: 0.25 m | Safety distance: 0.5 m | Early react distance: 0.8 m')
         print('Kollisionsgrænser: 12 cm front, 10 cm sider')
         print('Auto-stop efter 120 sekunder')
         print('--------------------------------------------------')
@@ -33,17 +34,18 @@ class Turtlebot3ObstacleDetection(Node):
         # --- ROS-related ---
         self.scan_ranges = []
         self.has_scan_received = False
-        self.stop_distance = 0.2
-        self.safety_distance = 0.4
+        self.stop_distance = 0.25
+        self.safety_distance = 0.5
         self.early_react_distance = 0.8
 
         self.tele_twist = Twist()
-        self.tele_twist.linear.x = 0.15
+        self.tele_twist.linear.x = 0.2
         self.tele_twist.angular.z = 0.0
 
 
         self.speed_accumulation = 0.0 
         self.speed_updates = 0 
+        self.dt = 0.05
         self.collision_counter = 0 
         self.in_collision = False 
 
@@ -97,7 +99,7 @@ class Turtlebot3ObstacleDetection(Node):
     #                    Implementation of "victim"
     # ********************************************************************
     
-    def rgb_sensor(self):
+    def read_rgb_sensor(self):
         try:
             data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
             green = data[1] + data[0] / 256
@@ -112,9 +114,9 @@ class Turtlebot3ObstacleDetection(Node):
                     self.victim_counter += 1
                     self.on_victim = True
                     self.get_logger().info('Victim detected')
-                    GPIO.output(self.LED_PIN, True) # Turns on the LED.
+                    GPIO.output(self.GPIO_LED, True) # Turns on the LED.
                     time.sleep(2) # Led tændt i to sekunder.
-                    GPIO.output(self.LED_PIN, False) # Turns off the LED.
+                    GPIO.output(self.GPIO_LED, False) # Turns off the LED.
                     self.last_victim_time = current_time
             else:
                 self.on_victim = False
@@ -138,12 +140,16 @@ class Turtlebot3ObstacleDetection(Node):
         self.tele_twist = msg
 
     def timer_callback(self):
-        if self.has_scan_received:
-            obstacle_distances = self.detect_obstacle()
-            self.avoid_obstacle(obstacle_distances)
-            # Update average speed
-            self.speed_accumulation += abs(self.tele_twist.linear.x)
-            self.speed_updates += 1
+        if not self.has_scan_received:
+            return
+        
+        obstacle_distances = self.detect_obstacle()
+        twist = self.avoid_obstacle(obstacle_distances)
+        self.cmd_vel_pub.publish(twist)
+
+        # Update average speed
+        self.speed_accumulation += abs(twist.linear.x) * self.dt
+        self.speed_updates += 1
 
     def detect_obstacle(self):
         zones = {
@@ -191,13 +197,12 @@ class Turtlebot3ObstacleDetection(Node):
             obstacle_distances["mid"] > self.safety_distance):
 
             if obstacle_distances["left_inner"] > obstacle_distances["right_inner"]:
-                twist.linear.x = 0.15
+                twist.linear.x = 0.18
                 twist.angular.z = 0.1
             else:
-                twist.linear.x = 0.15
+                twist.linear.x = 0.18
                 twist.angular.z = -0.1
-            self.cmd_vel_pub.publish(twist)
-            return
+            return twist
 
         # Forhindring meget tæt
         if obstacle_distances["mid"] < self.stop_distance:
@@ -224,16 +229,16 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Let drej baseret på åben sti
         elif obstacle_distances["left_outer"] > obstacle_distances["right_outer"]:
-            twist.linear.x = 0.15
+            twist.linear.x = 0.18
             twist.angular.z = 0.3
         elif obstacle_distances["right_outer"] > obstacle_distances["left_outer"]:
-            twist.linear.x = 0.15
+            twist.linear.x = 0.18
             twist.angular.z = -0.3
         else:
             twist.linear.x = self.tele_twist.linear.x
             twist.angular.z = self.tele_twist.angular.z
 
-        self.cmd_vel_pub.publish(twist)
+        return twist
 
 
 
@@ -247,10 +252,8 @@ class Turtlebot3ObstacleDetection(Node):
         stop_msg.angular.z = 0.0
         self.cmd_vel_pub.publish(stop_msg)
 
-        if self.speed_updates > 0:
-            avg_speed = self.speed_accumulation / self.speed_updates
-        else:
-            avg_speed = 0.0
+        total_time = self.speed_updates * self.dt      
+        avg_speed  = (self.speed_accumulation / total_time) if total_time > 0 else 0.0
 
         print("\n--- SIMULATIONSRESULTAT ---")
         print(f"Gennemsnitlig lineær hastighed: {avg_speed:.3f} m/s")
@@ -267,7 +270,6 @@ class Turtlebot3ObstacleDetection(Node):
 #                                   MAIN
 ##############################################################################
 def main(args=None):
-    print("ok")
     rclpy.init(args=args)
 
     obstacle_node = Turtlebot3ObstacleDetection()
@@ -286,3 +288,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+
