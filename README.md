@@ -45,7 +45,7 @@ The final output (printed after a 120 s run) includes:
   • **Subscribers:**  
     - `/scan` (LaserScan) → `scan_callback()`  
     - `/cmd_vel_raw` (Twist) → `cmd_vel_raw_callback()`  
-  • **Publisher:** `/cmd_vel` (Twist) → publishes computed drive commands at 20 Hz (every 0.05 s).
+  • **Publisher:** `/cmd_vel` (Twist) → publishes computed drive commands (every 0.05 s).
 
 - **Hardware**:  
    - TurtleBot3 Burger base  
