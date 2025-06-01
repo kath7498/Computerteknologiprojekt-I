@@ -47,7 +47,7 @@ The final output (printed after a 120 s run) includes:
     - `/cmd_vel_raw` (Twist) → `cmd_vel_raw_callback()`  
   • **Publisher:** `/cmd_vel` (Twist) → publishes computed drive commands at 20 Hz (every 0.05 s).
 
-**Hardware**:  
+- **Hardware**:  
    - TurtleBot3 Burger base  
    - Raspberry Pi 3  
    - ISL29125 RGB sensor (I²C)  
